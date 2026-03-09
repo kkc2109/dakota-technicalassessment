@@ -1,0 +1,52 @@
+name: energy_analytics
+version: "1.0.0"
+config-version: 2
+
+profile: energy_analytics
+
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# ---------------------------------------------------------------------------
+# Model configurations by layer
+# ---------------------------------------------------------------------------
+models:
+  energy_analytics:
+
+    # Bronze: views over raw tables — no transformation, just schema refs
+    bronze:
+      +materialized: view
+      +schema: staging       # dbt prepends target schema → staging_bronze in practice
+      +tags: ["bronze"]
+      +group: bronze
+      +description: "Bronze layer: views directly over raw ingested tables. No transformation."
+
+    # Silver: cleaned, validated, joined — incremental where appropriate
+    silver:
+      +materialized: incremental
+      +incremental_strategy: append
+      +schema: staging
+      +tags: ["silver"]
+      +group: silver
+      +description: "Silver layer: cleaned, validated, and normalized data."
+      +on_schema_change: append_new_columns
+
+    # Gold: aggregated KPIs and mart tables — full table refresh
+    gold:
+      +materialized: table
+      +schema: analytics
+      +tags: ["gold"]
+      +group: gold
+      +description: "Gold layer: aggregated KPIs and analytics-ready mart tables."
+
+vars:
+  # Default lookback for incremental models
+  incremental_lookback_days: 7

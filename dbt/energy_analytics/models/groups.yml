@@ -1,0 +1,14 @@
+version: 2
+
+groups:
+  - name: bronze
+    owner:
+      name: Dakota Analytics
+
+  - name: silver
+    owner:
+      name: Dakota Analytics
+
+  - name: gold
+    owner:
+      name: Dakota Analytics

@@ -1,10 +1,39 @@
-version: '3.8'
+version: "3.8"
 
-# This is a starter template. Modify and extend based on your implementation.
-# The code below is just for example, we expect you to modify it.
+# =============================================================================
+# Dakota Analytics — Energy Pipeline
+# Services:
+#   postgres           — PostgreSQL 15 (energy_analytics + dagster_db)
+#   api                — FastAPI enrichment service (port 8000)
+#   dagster-webserver  — Dagster UI (port 3000)
+#   dagster-daemon     — Schedules, sensors, and backfill runner
+#   adminer            — PostgreSQL web UI (port 8081)
+#   dbt-docs           — dbt lineage + docs UI (port 8082)
+# =============================================================================
+
+x-dagster-env: &dagster-env
+  DAGSTER_HOME: /app/orchestration
+  DAGSTER_PG_HOST: postgres
+  DAGSTER_PG_PORT: "5432"
+  DAGSTER_PG_DB: dagster_db
+  DAGSTER_PG_USER: ${POSTGRES_USER:-dakota_user}
+  DAGSTER_PG_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:-energy_analytics}
+  POSTGRES_USER: ${POSTGRES_USER:-dakota_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+  EIA_API_KEY: ${EIA_API_KEY:-your_key_here}
+  ENRICHMENT_API_URL: http://api:8000
+  DBT_PROFILES_DIR: /app/dbt/energy_analytics
 
 services:
-  # PostgreSQL Database or other database
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — primary data store
+  # Runs init scripts in order: 00 (create dagster_db) → 01 (schemas) →
+  # 02 (raw tables) → 03 (indexes)
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: dakota_postgres
@@ -16,21 +45,125 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
+      - ./database/init:/docker-entrypoint-initdb.d:ro
     networks:
       - dakota_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dakota_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dakota_user} -d ${POSTGRES_DB:-energy_analytics}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
 
-  # Add your services here:
-  # - FastAPI service
-  # - Orchestrator
-  # - dbt
-  # - Jupyter (optional for notebooks)
-  # etc.
+  # ---------------------------------------------------------------------------
+  # FastAPI Enrichment Service
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: dakota_api
+    environment:
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    networks:
+      - dakota_network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Dagster Webserver (UI at http://localhost:3000)
+  # ---------------------------------------------------------------------------
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: dakota_dagster_webserver
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w /app/orchestration/workspace.yaml
+    environment:
+      <<: *dagster-env
+    ports:
+      - "3000:3000"
+    volumes:
+      - dagster_home:/app/orchestration/.dagster
+      - ./reports/output:/app/reports/output
+    networks:
+      - dakota_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Dagster Daemon (schedules, sensors, backfills)
+  # ---------------------------------------------------------------------------
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: dakota_dagster_daemon
+    command: dagster-daemon run -w /app/orchestration/workspace.yaml
+    environment:
+      <<: *dagster-env
+    volumes:
+      - dagster_home:/app/orchestration/.dagster
+      - ./reports/output:/app/reports/output
+    networks:
+      - dakota_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Adminer — PostgreSQL web UI (http://localhost:8081)
+  # Login: System=PostgreSQL, Server=postgres, Username/Password/DB from .env
+  # ---------------------------------------------------------------------------
+  adminer:
+    image: adminer:4
+    container_name: dakota_adminer
+    ports:
+      - "8081:8080"
+    networks:
+      - dakota_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # dbt Docs — lineage DAG + model documentation (http://localhost:8082)
+  # ---------------------------------------------------------------------------
+  dbt-docs:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+    container_name: dakota_dbt_docs
+    command: bash -c "cd /app/dbt/energy_analytics && dbt docs generate --profiles-dir . && dbt docs serve --profiles-dir . --host 0.0.0.0 --port 8082"
+    environment:
+      <<: *dagster-env
+    ports:
+      - "8082:8082"
+    networks:
+      - dakota_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 networks:
   dakota_network:
@@ -38,3 +171,4 @@ networks:
 
 volumes:
   postgres_data:
+  dagster_home:

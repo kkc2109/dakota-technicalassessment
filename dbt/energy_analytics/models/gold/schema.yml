@@ -1,0 +1,109 @@
+version: 2
+
+models:
+  - name: gold_generation_by_fuel_monthly
+    description: >
+      Gold mart: monthly electricity generation by fuel type and state with
+      carbon intensity enrichment and market share calculation.
+      Primary analytical table for generation mix analysis.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: fuel_type_code
+        tests:
+          - not_null
+      - name: total_generation_mwh
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              config:
+                severity: warn
+      - name: pct_of_state_generation
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              config:
+                severity: warn
+      - name: fuel_category
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["renewable", "low_carbon", "fossil"]
+
+  - name: gold_price_trends
+    description: >
+      Gold mart: monthly retail electricity price trends by state and sector.
+      Includes YoY change, MoM change, rolling 12-month average, and
+      retail-to-wholesale spread for comprehensive price analysis.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: price_usd_per_mwh
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 10000
+
+  - name: gold_carbon_footprint
+    description: >
+      Gold mart: monthly carbon footprint analysis by state.
+      Includes renewable share, clean energy share, grid carbon intensity,
+      and YoY carbon intensity change. Drives the sustainability section of reports.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: total_generation_mwh
+        tests:
+          - not_null
+      - name: renewable_share_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: clean_energy_share_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: grid_carbon_intensity_gco2_kwh
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 2000
+
+  - name: gold_executive_summary
+    description: >
+      Gold mart: flat executive KPI table combining generation, carbon, price,
+      market, and weather metrics. The single source of truth for CEO-level reports.
+      One row per state per month with all key metrics denormalised for easy consumption.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: total_generation_mwh
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: renewable_share_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100

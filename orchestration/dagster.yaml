@@ -1,0 +1,24 @@
+# Dagster instance configuration.
+# Tells Dagster to use PostgreSQL for run/event storage instead of SQLite.
+# This enables multi-process (webserver + daemon) deployments.
+
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: DAGSTER_PG_USER
+      password:
+        env: DAGSTER_PG_PASSWORD
+      hostname:
+        env: DAGSTER_PG_HOST
+      db_name:
+        env: DAGSTER_PG_DB
+      port:
+        env: DAGSTER_PG_PORT
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+
+telemetry:
+  enabled: false

@@ -1,0 +1,112 @@
+version: 2
+
+models:
+  - name: silver_generation_cleaned
+    description: >
+      Silver: cleaned and standardised EIA electricity generation data.
+      Key transformations: null filtering, code standardisation, unit conversion
+      (thousand MWh → MWh), period decomposition (year, month, date).
+      Incremental model using merge strategy on period/state/sector/fuel_type.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: fuel_type_code
+        tests:
+          - not_null
+      - name: generation_mwh
+        description: Net generation in MWh (converted from EIA thousand MWh).
+        tests:
+          - not_null
+      - name: period_year
+        tests:
+          - not_null
+      - name: period_month
+        tests:
+          - not_null
+
+  - name: silver_prices_cleaned
+    description: >
+      Silver: cleaned and standardised EIA retail electricity price data.
+      Key transformations: unit conversion (cents/kWh → USD/MWh),
+      null/zero price filtering, code standardisation.
+    columns:
+      - name: period
+        tests:
+          - not_null
+      - name: state_code
+        tests:
+          - not_null
+      - name: price_usd_per_mwh
+        description: Retail price in USD/MWh (converted from cents/kWh).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 5000
+
+  - name: silver_weather_aggregated
+    description: >
+      Silver: daily weather summary statistics per grid region.
+      Aggregates sub-daily readings to daily averages, min, and max values.
+    columns:
+      - name: region
+        tests:
+          - not_null
+      - name: reading_date
+        tests:
+          - not_null
+      - name: avg_temperature_c
+        tests:
+          - not_null
+
+  - name: silver_carbon_reference
+    description: >
+      Silver: daily carbon intensity reference per region and fuel type.
+      Deduplicates to daily averages for joining with monthly EIA data.
+    columns:
+      - name: region
+        tests:
+          - not_null
+      - name: fuel_type
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - coal
+                - natural_gas
+                - petroleum
+                - nuclear
+                - hydro
+                - wind
+                - solar_pv
+                - biomass
+                - geothermal
+                - other
+      - name: avg_direct_co2_per_mwh
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 2000
+
+  - name: silver_market_aggregated
+    description: >
+      Silver: daily market price aggregates per grid region.
+      Includes spot, peak, off-peak prices plus price volatility coefficient.
+    columns:
+      - name: region
+        tests:
+          - not_null
+      - name: reading_date
+        tests:
+          - not_null
+      - name: avg_spot_price_usd_mwh
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 10000
