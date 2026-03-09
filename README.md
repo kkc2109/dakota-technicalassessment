@@ -1,6 +1,6 @@
 # Dakota Analytics — Energy Analytics Pipeline
 
-An end-to-end data pipeline that ingests US electricity data from the EIA API, enriches it with weather, carbon, and market signals, transforms it through a Bronze → Silver → Gold architecture using dbt, and produces a CEO-ready interactive HTML report — all orchestrated by Dagster in Docker.
+An end-to-end data pipeline that ingests US electricity data from the EIA API, enriches it with weather, carbon, and market signals, transforms it through a Bronze → Silver → Gold architecture using dbt, and produces an interactive HTML report, orchestrated by Dagster in Docker.
 
 ## Code Owner
 
@@ -25,7 +25,7 @@ cd dakota-technicalassessment
 
 **Step 2 — Set up your environment file**
 
-The `.env` file is not committed to the repository as it contains sensitive credentials. For this assessment, all required values including the EIA API key are already filled in `.env.example`. Simply copy it across and everything will work out of the box:
+The `.env` file is not committed to the repository as it contains sensitive credentials. For this assessment, all required values, including the EIA API key, are already filled in `.env.example`. Simply copy it across, and everything will work out of the box:
 
 ```bash
 cp .env.example .env
